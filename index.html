@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛰️ 위성사진 & 4대 기상 관제 - 글로벌 실시간 해양 기상 AI 시스템</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Esri 고해상도 실사 위성사진 지도, 실시간 4대 기상(태풍, 파도, 비, 낙뢰) 관제 및 AI 최적 항로 시스템">
+    <meta name="keywords" content="위성사진지도, 태풍, 고파도, 강수비, 낙뢰, 기상청, OBS_BUOY_TIM, 체감온도, 부산, LA, 시애틀, 사우샘프턴">
+
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Leaflet.js CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+    <!-- App Custom CSS (단일 루트 동일 경로 참조) -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- 1. 상단 네비게이션 헤더 -->
+    <header class="navbar">
+        <div class="brand">
+            <i class="fa-solid fa-ship brand-icon"></i>
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="brand-title">🛰️ 위성사진 & 실시간 4대 위험 기상 AI 관제</span>
+                    <span class="brand-badge">Typhoon · Waves · Rain · Lightning</span>
+                </div>
+            </div>
+        </div>
+        <div class="api-status">
+            <div class="status-dot"></div>
+            <span>기상청/글로벌 실시간 관측 연동 (Key: 495603f5d...)</span>
+        </div>
+    </header>
+
+    <!-- 2. 메인 컨테이너 (사이드바 + 지도) -->
+    <div class="main-container">
+        
+        <!-- 좌측 제어 및 분석 사이드바 -->
+        <aside class="sidebar">
+            
+            <!-- A. 다중 목적지 AI 추천 & 항로 선택 -->
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--accent-purple);"></i>
+                        <span>미국/글로벌 목적지 AI 안전 추천</span>
+                    </div>
+                </div>
+
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">
+                    실시간 기온(TA), 풍속(Knot/ms), 유의파고(WV_HT) 및 기상 특보를 종합 분석하여 **가장 안전한 항로**를 추천합니다.
+                </div>
+
+                <button id="btnRecommendSafest" class="btn-purple">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>안전 항로 AI 즉시 추천 및 순위 평가</span>
+                </button>
+
+                <!-- AI 추천 결과 출력 컨테이너 -->
+                <div id="recommendationContainer" style="margin-top: 10px;">
+                    <!-- JavaScript 동적 생성 -->
+                </div>
+            </section>
+
+            <!-- B. 개별 항로 선택 및 기상 시뮬레이션 -->
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-route"></i>
+                        <span>한국 ➔ 미국/글로벌 정밀 항로</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="routeSelect">출발지 ➔ 목적지 항로 선택</label>
+                    <select id="routeSelect" class="form-select">
+                        <option value="BUSAN_LA">부산 ➔ 미국 LA (북태평양 남부 정밀 해로)</option>
+                        <option value="BUSAN_SEATTLE">부산 ➔ 미국 시애틀 (북태평양 고위도 대권)</option>
+                        <option value="BUSAN_SANFRANCISCO">부산 ➔ 미국 샌프란시스코 (태평양 중앙)</option>
+                        <option value="INCHEON_LA">인천 ➔ 미국 LA (황해-태평양 해로)</option>
+                        <option value="BUSAN_SOUTHAMPTON">부산 ➔ 영국 사우샘프턴 (유럽 정밀 수로)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <label for="weatherSlider">태풍/폭풍우/고파도 가중치</label>
+                        <span id="weatherSliderVal" class="slider-value">1.0x</span>
+                    </div>
+                    <div class="slider-container">
+                        <input type="range" id="weatherSlider" class="slider" min="1.0" max="2.5" step="0.1" value="1.0">
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; background: rgba(0, 240, 255, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(0, 240, 255, 0.2);">
+                    <label for="chkShowBuoy" style="font-size: 12px; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-anchor" style="color: var(--accent-blue);"></i>
+                        <span>기상청 해양부표 마커 표시</span>
+                    </label>
+                    <input type="checkbox" id="chkShowBuoy" checked style="accent-color: var(--accent-blue); width: 16px; height: 16px; cursor: pointer;">
+                </div>
+
+                <button id="btnSimulate" class="btn-primary">
+                    <i class="fa-solid fa-compass"></i>
+                    <span>선택 항로 피항 경로 산출</span>
+                </button>
+            </section>
+
+            <!-- C. 여름철 해양 체감온도 선형회귀 계산기 -->
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-calculator"></i>
+                        <span>여름철 해양 체감온도 계산기</span>
+                    </div>
+                </div>
+
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; background: rgba(0,240,255,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(0,240,255,0.15);">
+                    <b>선형회귀 방정식:</b><br>
+                    <code>AT = 0.825×TA - 0.245×WS + 0.115×HM + 2.15</code>
+                </div>
+
+                <div class="form-group">
+                    <label for="calcTemp">해상 기온 TA (℃)</label>
+                    <input type="number" id="calcTemp" class="form-input" value="31.5" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="calcWind">해상 풍속 WS (m/s)</label>
+                    <input type="number" id="calcWind" class="form-input" value="8.5" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="calcHumidity">상대 습도 HM (%)</label>
+                    <input type="number" id="calcHumidity" class="form-input" value="85" step="1">
+                </div>
+
+                <button id="btnCalculateAT" class="btn-primary" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fa-solid fa-temperature-high"></i>
+                    <span>체감온도 즉시 예측</span>
+                </button>
+
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">예측 체감온도(AT)</div>
+                        <div id="resultAT" class="stat-value">-- ℃</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">선원 온열 위험도 (Knot)</div>
+                        <div id="resultRisk" class="stat-value">--</div>
+                    </div>
+                </div>
+                <div id="resultDesc" style="font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.4; text-align: center;">
+                    수치를 입력한 후 예측 버튼을 누르세요.
+                </div>
+            </section>
+
+        </aside>
+
+        <!-- 우측 메인 지도 영역 -->
+        <main id="map">
+            <!-- 지도 상단 오버레이 토글 컨트롤 (좌측) -->
+            <div class="map-top-left-controls">
+                <button id="btnToggleClimate" class="btn-toggle-layer">
+                    <i class="fa-solid fa-earth-americas" style="color: var(--accent-blue);"></i>
+                    <span>🌍 기후도</span>
+                </button>
+                <button id="btnToggleHazard" class="btn-toggle-layer active">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-warning);"></i>
+                    <span>🌀 태풍/폭풍</span>
+                </button>
+            </div>
+
+            <!-- 지도 상단 4대 위험 기상 확장 관제 바 (🌀 태풍, 🌊 파도, 🌧️ 비, ⚡ 낙뢰) -->
+            <div class="map-top-center-bar">
+                <div class="weather-widget-item hazard-typhoon">
+                    <span>🌀 태풍:</span>
+                    <span id="widgetWind" class="val">--m/s</span>
+                </div>
+                <div class="weather-widget-divider"></div>
+                <div class="weather-widget-item hazard-wave">
+                    <span>🌊 파도:</span>
+                    <span id="widgetWave" class="val">--m</span>
+                </div>
+                <div class="weather-widget-divider"></div>
+                <div class="weather-widget-item hazard-rain">
+                    <span>🌧️ 비/습도:</span>
+                    <span id="widgetRain" class="val">--%</span>
+                </div>
+                <div class="weather-widget-divider"></div>
+                <div class="weather-widget-item hazard-lightning">
+                    <span>⚡ 낙뢰:</span>
+                    <span id="widgetLightning" class="val">안정</span>
+                </div>
+                <div class="weather-widget-divider"></div>
+                <div class="weather-widget-item">
+                    <span>☀️ AT:</span>
+                    <span id="widgetAT" class="val">--℃</span>
+                </div>
+            </div>
+
+            <!-- 지도 상단 우측 메인 지도 스위처 컨트롤바 (전면 노출) -->
+            <div class="map-top-right-controls">
+                <button id="btnTileSat" class="btn-tile-switch sat-btn">
+                    <i class="fa-solid fa-satellite"></i>
+                    <span>🛰️ 실사 위성사진 지도</span>
+                </button>
+                <button id="btnTileDark" class="btn-tile-switch active">
+                    <i class="fa-solid fa-moon"></i>
+                    <span>🌃 다크 관제도</span>
+                </button>
+                <button id="btnTileOcean" class="btn-tile-switch">
+                    <i class="fa-solid fa-water"></i>
+                    <span>🌊 해양 지형도</span>
+                </button>
+            </div>
+
+            <!-- 지도 요약 리포트 카드 (우측 하단 배치) -->
+            <div class="map-floating-panel">
+                <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-chart-line" style="color: var(--accent-blue);"></i> 선택 항로 관제 분석</span>
+                </div>
+
+                <div id="summaryRouteName" style="font-size: 12px; font-weight: 600; color: var(--accent-blue); margin-bottom: 6px;">
+                    --
+                </div>
+
+                <div class="route-compare-item">
+                    <span class="route-tag tag-original">표준 항로</span>
+                    <span id="summaryOrigDist" style="font-size: 12px; font-weight: 600;">-- NM</span>
+                </div>
+
+                <div class="route-compare-item">
+                    <span class="route-tag tag-optimized">안전 피항 항로</span>
+                    <span id="summaryOptDist" style="font-size: 12px; font-weight: 600; color: var(--accent-emerald);">-- NM</span>
+                </div>
+
+                <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                    <div>• <b>항로 안전 지수:</b> <span id="summarySafetyScore" style="color: var(--accent-blue); font-weight: bold;">--</span></div>
+                    <div>• <b>효과:</b> <span id="summaryFuelSave" style="color: #e2e8f0;">--</span></div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Leaflet JS CDN -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity=" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- App JavaScript Modules (단일 루트 동일 경로 참조) -->
+    <script src="regression.js"></script>
+    <script src="routes_data.js"></script>
+    <script src="route_optimizer.js"></script>
+    <script src="api_service.js"></script>
+    <script src="climate_overlay.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
